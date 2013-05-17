@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html class="no-js">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <link rel="stylesheet" type="text/css" href="example.css" />
+    </head>
+    <body>
+        <h1>Hello world! jquery-text-overload demo.</h1>
+        <h3>enable auto-complete by typing @ </h3>
+        <div>
+        	<h4> Works on any textarea/input element from your document </h4>
+					<textarea style="width:415px; resize:none;"></textarea>
+
+					<h5> Supports unique elements </h5>
+					<input type="text" style="width:415px; resize:none;" />
+
+					<h5> Supports content editable elements</h5>
+					<div class="editable" contentEditable="true" style="width: 415px; height: 100px; border: 1px solid #888"></div>
+
+					<h5> Prevent repetition </h5>
+					<div class="editable-repeat" contentEditable="true" style="width: 415px; height: 100px; border: 1px solid #888"></div>
+				</div>
+
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+        <script type="text/javascript" src="../lib/jquery.caretposition.js"></script>
+				<script type="text/javascript" src="../lib/jquery.text-overload.js"></script>
+		<script>
+			$(document).ready(function() {
+				var values = [{val:'santiagotactivos', meta:'Santiago Montero'},
+							  {val:'johnnyhalife', meta:'Johnny Halife'},
+							  {val:'arielflesler', meta:'Ariel Flesler'},
+							  {val:'rbajales', meta:'Raul Bajales'}];
+
+				for (var i = 0; i < 10; i++) {
+					values.push({val: 'johnnyhalife' + i})
+				};
+
+
+				var customItemTemplate = "<div><span />&nbsp;<small /></div>";
+
+				function elementFactory(element, e) {
+					console.log('trying this out ');
+					var template = $(customItemTemplate).find('span')
+															.text('@' + e.val).end()
+												   		.find('small')
+															.text("(" + (e.meta || e.val) + ")").end();
+					element.append(template);
+				};
+
+				// here is how we use it
+				$('textarea').overload({values: values, elementFactory: elementFactory, debug: true});
+
+
+				// with repetition but unique flag
+				var repeatedElements = [{val: 'johnny'}, {val: 'chanta'}, {val: 'chanta'}, {val: 'chanta'}];
+				$('input').overload({unique: true, values: repeatedElements, elementFactory: elementFactory});
+
+				$('.editable').overload({unique: true, values: repeatedElements, elementFactory: elementFactory});
+				$('.editable-repeat').overload({repeat: false, unique: true, values: repeatedElements, elementFactory: elementFactory});
+				$('.editable-position').overload({repeat: false, unique: true, values: values, elementFactory: elementFactory});
+			});
+		</script>
+    </body>
+</html>
