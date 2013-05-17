@@ -2,11 +2,11 @@
 
 
 
-# Overview #
+## Overview ##
 
+To build just run `cake build`. See example for how to use, will put some of those in this readme later.
 
-
-# References #
+## References ##
 
 Inspired and used as foundation:
 * jquery-sew - forked off the implementation to make it support multi-tokens and other things
