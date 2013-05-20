@@ -16,37 +16,81 @@ class OverloadPlugin
   KEYS = [40, 38, 13, 27, 9]
   TIME_UNTIL_HIDE = 1000
 
-  # Simple logger.
-  
   constructor: (element, options) ->
     @options = options
     @element = element
     @$element = $(element)
     @$itemList = $(MENU_TEMPLATE)
 
-    @reset()
     @_name = pluginName
 
-    @expression = new RegExp('(?:^|\\b|\\s)' + @options.token + '([\\w.]*)$')
-    @cleanupHandle = null
+    # TODO add tokens and callbacks
+    # TODO add callback for values
 
+    # Approach to support multiple lookups 
+    # tokens: [{token: '@', lookup: functionReference, select: functionCallback}] 
+    # Alternative: [{token: '@', values: [ array of values ], select: functionCallback}]  
+    @lookupFilters = {}
+    @selectCallbacks = {}
+    @tokens = {}
+
+    if @options.tokens?
+      for token in @options.tokens
+        lookup = @setupFilter(token)
+        @lookupFilters[token.token] = lookup if lookup
+        @selectCallbacks[token.token] = token.select if token.select?
+        @tokens[token.token] = token 
+    else 
+      token = 
+        token: @options.token
+        values: @options.values
+        lookup: @options.valueLookup
+
+      @lookupFilters[@options.token] = @setupFilter(token)
+      @tokens[@options.token] = token
+    
+    expressionString = '(?:^|\\b|\\s)[' + Object.keys(@tokens).join('|') + ']([\\w.]*)$'
+    @expression = new RegExp(expressionString)  
+
+    @reset()
+    @cleanupHandle = null
     @init()
 
+  # Sets up the lookup filter for a given token
+  # Could be passed in or based on a value list that is passed in 
+  setupFilter: (token) ->
+    if token.lookup?
+      if @options.unique
+        return (val) => 
+          OverloadPlugin.getUniqueElements(token.lookup(val))
+      else 
+        return token.lookup
+    if (values = token.values)
+      (val) => 
+        filterItem = (e) =>
+          exp = new RegExp('\\W*' + token.token + e.val + '(\\W|$)')
+          if(!@options.repeat && @getText().match(exp))
+            return false
+
+          return val == "" ||
+                e.val.toLowerCase().indexOf(val.toLowerCase()) >= 0 ||
+                (e.meta || "").toLowerCase().indexOf(val.toLowerCase()) >= 0
+        if @options.unique
+          OverloadPlugin.getUniqueElements(values.filter($.proxy(filterItem, @)))
+        else 
+          values.filter($.proxy(filterItem, @))
+
   init: ->
-    return unless @options.values.length 
     @$element.bind('keyup', $.proxy(@onKeyUp, @))
              .bind('keydown', $.proxy(@onKeyDown, @))
-             .bind('focus', $.proxy(@renderElements, @, @options.values))
+             .bind('focus', $.proxy(@renderElements, @, []))
              .bind('blur', $.proxy(@remove, @))
   reset: ->
-    if(@options.unique) 
-      @options.values = OverloadPlugin.getUniqueElements(@options.values)
-
     @index = 0
     @matched = false
     @dontFilter = false
     @lastFilter = undefined
-    @filtered = @options.values.slice(0)
+    @filtered = []
 
   next: ->
     @index = (@index + 1) % @filtered.length
@@ -57,6 +101,8 @@ class OverloadPlugin
     @hightlightItem()
 
   select: ->
+    # TODO set the option with the token
+    # the name and value so it can be selected / sent
     @replace(@filtered[@index].val)
     @hideList()
 
@@ -84,12 +130,17 @@ class OverloadPlugin
 
   hightlightItem: ->
     @$itemList.find(".-sew-list-item").removeClass("selected")
-    container = @$itemList.find(".-sew-list-item").parent()
-    element = @filtered[@index].element.addClass("selected")
-    scrollPosition = element.position().top
-    container.scrollTop(container.scrollTop() + scrollPosition)
 
+    if @filtered.length
+      container = @$itemList.find(".-sew-list-item").parent()
+      element = @filtered[@index].element.addClass("selected")
+      scrollPosition = element.position().top
+      container.scrollTop(container.scrollTop() + scrollPosition)
+
+  # Called after the list of values are found via the filterList method
+  # It renders the values using the elementFactory which produces the list how you want it to look.
   renderElements: (values) ->
+    # TODO append to another element
     $("body").append(@$itemList)
     container = @$itemList.find('ul').empty()
     elementSetup = (e, i) =>
@@ -99,14 +150,14 @@ class OverloadPlugin
       containerElement.on('click', $.proxy(@onItemClick, @, e))
       e.element = containerElement.on('mouseover', $.proxy(@onItemHover, @, i))
 
-    $.proxy(elementSetup(e,i), @) for e, i in values 
+    $.proxy(elementSetup(e,i), @) for i, e of values 
     @index = 0
-    @hightlightItem()
+    if values.length
+      @hightlightItem()
 
 
   displayList: ->
     return unless @filtered.length
-
     @$itemList.show()
     element = @$element
     offset = @$element.offset()
@@ -120,24 +171,14 @@ class OverloadPlugin
     @$itemList.hide()
     @reset()
 
-  # TODO add lookup callback
-  # TODO lookup based on token such as @ / # 
-  filterList: (val) ->
+  # Called with the value of the lookup without the token
+  # For instance, if @blah is typed it searches for blah
+  filterList: (val, lookup) ->
     return if (val == @lastFilter) 
-
     @lastFilter = val
     @$itemList.find(".-sew-list-item").remove()
-    filterItem = (e) =>
-      exp = new RegExp('\\W*' + @options.token + e.val + '(\\W|$)')
-      if(!@options.repeat && @getText().match(exp))
-        return false
 
-      return  val == "" ||
-            e.val.toLowerCase().indexOf(val.toLowerCase()) >= 0 ||
-            (e.meta || "").toLowerCase().indexOf(val.toLowerCase()) >= 0
-
-    vals = @filtered = @options.values.filter($.proxy(filterItem, @))
-
+    vals = @filtered = lookup(val)
     if vals.length 
       @renderElements(vals)
       @$itemList.show()
@@ -157,8 +198,8 @@ class OverloadPlugin
 
   onKeyUp: (e) ->
     startpos = @$element.getCursorPosition()
-    matches = @getText().substring(0, startpos).match(@expression)
-
+    text = @getText().substring(0, startpos)
+    matches = text.match(@expression)
     if !matches && @matched
       @matched = false
       @dontFilter = false
@@ -171,7 +212,9 @@ class OverloadPlugin
         @lastFilter = "\n"
         @matched = true
       else if !@dontFilter
-        @filterList(matches[1])
+        lookup = @lookupFilters[@options.token]
+        @filterList(matches[1], lookup)
+        @displayList()
 
   onKeyDown: (e) ->
     listVisible = @$itemList.is(":visible")
